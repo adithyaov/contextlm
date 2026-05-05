@@ -1,0 +1,163 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  background: #0d0d0d;
+  color: #bbb;
+  padding: 28px 24px;
+  min-height: 100vh;
+}
+
+h1 { color: #eee; font-size: 17px; letter-spacing: 1px; margin-bottom: 22px; }
+
+/* ── Panels ─────────────────────────────────────────────────── */
+.panel {
+  background: #111;
+  border: 1px solid #1e1e1e;
+  border-radius: 3px;
+  padding: 13px 15px;
+  margin-bottom: 12px;
+}
+.panel-title {
+  font-size: 10px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 9px;
+}
+
+/* ── Inputs / Buttons ───────────────────────────────────────── */
+.row { display: flex; gap: 7px; align-items: center; }
+
+input[type=text] {
+  flex: 1;
+  background: #0d0d0d;
+  color: #bbb;
+  border: 1px solid #222;
+  border-radius: 2px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+input[type=text]:focus { border-color: #333; }
+input[type=text]::placeholder { color: #333; }
+
+button {
+  background: #181818;
+  color: #777;
+  border: 1px solid #252525;
+  border-radius: 2px;
+  padding: 5px 11px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover { background: #1e1e1e; color: #aaa; }
+
+button.primary {
+  background: #0b1f0b;
+  color: #5a9e5a;
+  border-color: #173317;
+}
+button.primary:hover { background: #0e270e; }
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: #3a3a3a;
+  font-size: 12px;
+  padding: 3px 7px;
+}
+button.ghost:hover { color: #888; background: transparent; }
+
+/* ── Repo cards ─────────────────────────────────────────────── */
+.repo {
+  background: #0f0f0f;
+  border: 1px solid #1c1c1c;
+  border-radius: 3px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.repo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 13px;
+  background: #141414;
+  border-bottom: 1px solid #1c1c1c;
+}
+.repo-name  { color: #ddd; margin-right: 9px; }
+.repo-path  { color: #3a3a3a; font-size: 12px; }
+.repo-acts  { display: flex; gap: 3px; }
+
+.repo-tree {
+  padding: 7px 11px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+/* ── File tree ──────────────────────────────────────────────── */
+details > :not(summary) { margin-left: 18px; }
+
+summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  color: #777;
+  user-select: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary:hover { color: #aaa; }
+
+.dir-arrow {
+  font-size: 8px;
+  color: #333;
+  display: inline-block;
+  width: 9px;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+}
+details[open] > summary .dir-arrow { transform: rotate(90deg); }
+
+label.tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  color: #666;
+}
+label.tree-file:hover { color: #999; }
+label.tree-file .file-icon { color: #2a2a2a; font-size: 11px; }
+
+input[type=checkbox] {
+  width: 13px;
+  height: 13px;
+  accent-color: #5a9e5a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Log ────────────────────────────────────────────────────── */
+#log {
+  background: #090909;
+  border: 1px solid #191919;
+  border-radius: 2px;
+  padding: 9px 11px;
+  min-height: 52px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+.ok   { color: #5a9e5a; }
+.err  { color: #b05050; }
+.info { color: #444;    }
