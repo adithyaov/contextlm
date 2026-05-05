@@ -47,10 +47,22 @@
         };
 
         flake = project.flake { };
+
+        exe = flake.packages."contextlm:exe:contextlm";
+
+        wrapped = pkgs.symlinkJoin {
+          name = "contextlm";
+          paths = [ exe ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/contextlm \
+              --set CONTEXTLM_WEB_DIR ${self}/web
+          '';
+        };
       in
       flake
       // {
-        packages.default = flake.packages."contextlm:exe:contextlm";
+        packages.default = wrapped;
         devShells.default = flake.devShell;
       }
     );

@@ -8,7 +8,9 @@ import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
 import qualified Data.Text.Lazy as TL
 import Data.Word (Word8)
 import Network.HTTP.Types (status400, status500)
+import Data.Maybe (fromMaybe)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import System.Environment (lookupEnv)
 import System.FilePath (dropExtension, takeFileName, (</>))
 import Web.Scotty
 
@@ -123,21 +125,22 @@ cloneAndBuildTree reposDir url = do
 
 serve :: ServeArgs -> IO ()
 serve args = do
+    webDir <- fromMaybe "web" <$> lookupEnv "CONTEXTLM_WEB_DIR"
     createDirectoryIfMissing True (serveReposDir args)
     scotty (servePort args) $ do
         -- Static files
         get "/" $ do
             setHeader "Content-Type" "text/html; charset=utf-8"
-            file "web/index.html"
+            file (webDir </> "index.html")
 
         get "/style.css" $ do
             setHeader "Content-Type" "text/css; charset=utf-8"
-            file "web/style.css"
+            file (webDir </> "style.css")
 
-        get "/utils.js" $ serveJs "web/utils.js"
-        get "/dummy.js" $ serveJs "web/dummy.js"
-        get "/live.js" $ serveJs "web/live.js"
-        get "/app.js" $ serveJs "web/app.js"
+        get "/utils.js" $ serveJs (webDir </> "utils.js")
+        get "/dummy.js" $ serveJs (webDir </> "dummy.js")
+        get "/live.js"  $ serveJs (webDir </> "live.js")
+        get "/app.js"   $ serveJs (webDir </> "app.js")
 
         -- GET /api/tree?dir=<path>
         get "/api/tree" $ do
