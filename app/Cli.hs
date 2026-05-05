@@ -9,17 +9,25 @@ parseArgs args = do
   rest0           <- expectFlag "--action" args
   (action, rest1) <- parseAction rest0
   case action of
-    AddContext -> AddContextCmd <$> parseAddContextArgs rest1
+    CreateContext -> CreateContextCmd <$> parseCreateContextArgs rest1
+    Clone      -> CloneCmd      <$> parseCloneArgs rest1
 
-parseAddContextArgs :: [String] -> Either ParseError AddContextArgs
-parseAddContextArgs args = do
-  rest0           <- expectFlag "--out" args
-  (out,    rest1) <- takeValue "--out" rest0
-  rest2           <- expectFlag "--title" rest1
-  (ttl,    rest3) <- takeValue "--title" rest2
-  (src,    rest4) <- parseContextSource rest3
-  rules           <- parseFilterRules rest4
-  pure $ AddContextArgs out ttl src (CFFileSystemFilter rules)
+parseCreateContextArgs :: [String] -> Either ParseError CreateContextArgs
+parseCreateContextArgs args = do
+  rest0           <- expectFlag "--dir" args
+  (d,      rest1) <- takeValue "--dir" rest0
+  rules           <- parseFilterRules rest1
+  pure $ CreateContextArgs d rules
+
+parseCloneArgs :: [String] -> Either ParseError CloneArgs
+parseCloneArgs args = do
+  rest0      <- expectFlag "--url" args
+  (u, rest1) <- takeValue "--url" rest0
+  rest2      <- expectFlag "--dir" rest1
+  (d, rest3) <- takeValue "--dir" rest2
+  case rest3 of
+    []    -> pure $ CloneArgs (GitSource u) d
+    (x:_) -> Left $ "Unexpected argument '" ++ x ++ "'"
 
 expectFlag :: String -> [String] -> Either ParseError [String]
 expectFlag flag []     = Left $ "Expected '" ++ flag ++ "' but reached end of arguments"
@@ -33,21 +41,11 @@ takeValue _    (x:xs) = Right (x, xs)
 
 parseAction :: [String] -> Either ParseError (Action, [String])
 parseAction []                   = Left "Expected action value but reached end of arguments"
-parseAction ("add-context":rest) = Right (AddContext, rest)
-parseAction (x:_)                = Left $ "Unknown action '" ++ x ++ "' (expected: add-context)"
+parseAction ("create-context":rest) = Right (CreateContext, rest)
+parseAction ("clone":rest)       = Right (Clone, rest)
+parseAction (x:_)                = Left $ "Unknown action '" ++ x ++ "' (expected: create-context, clone)"
 
-parseContextSource :: [String] -> Either ParseError (ContextSource, [String])
-parseContextSource args = do
-  rest0         <- expectFlag "--source" args
-  (src, rest1)  <- takeValue "--source" rest0
-  case src of
-    "git" -> do
-      rest2      <- expectFlag "--url" rest1
-      (u, rest3) <- takeValue "--url" rest2
-      pure (CSGitSource (GitSource u), rest3)
-    _ -> Left $ "Unknown source '" ++ src ++ "' (expected: git)"
-
-parseFilterRules :: [String] -> Either ParseError [FilterRule]
+parseFilterRules :: [String] -> Either ParseError [FilterRule String]
 parseFilterRules []                      = Right []
 parseFilterRules ("--include":glob:rest) = (Include glob :) <$> parseFilterRules rest
 parseFilterRules ("--exclude":glob:rest) = (Exclude glob :) <$> parseFilterRules rest
@@ -58,12 +56,15 @@ parseFilterRules (x:_)                   = Left $ "Unexpected argument '" ++ x +
 usage :: String
 usage = unlines
   [ "Usage:"
-  , "  contextlm --action add-context"
+  , "  contextlm --action create-context"
   , "            --out <file>"
   , "            --title <title>"
-  , "            --source git"
-  , "            --url <url>"
+  , "            --dir <directory>"
   , "            [--include <glob> | --exclude <glob>] ..."
+  , ""
+  , "  contextlm --action clone"
+  , "            --url <url>"
+  , "            --dir <directory>"
   , ""
   , "Arguments must appear in the order shown above."
   ]

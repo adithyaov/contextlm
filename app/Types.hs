@@ -1,26 +1,48 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Types where
 
-data Action = AddContext deriving (Show, Eq)
+import qualified Streamly.System.Command as Command
+import Streamly.Unicode.String (str)
+
+logCmd :: String -> IO ()
+logCmd cmd = putStrLn [str|$ #{cmd}|]
+
+runCmd :: String -> IO ()
+runCmd cmd = do
+  logCmd cmd
+  Command.toStdout cmd
+
+gitCloneTo :: GitSource -> FilePath -> IO ()
+gitCloneTo gitSource dest =
+  let url = gsUrl gitSource
+  in runCmd [str|git clone #{url} #{dest}|]
+
+-- Data types
+
+data Action = CreateContext | Clone deriving (Show, Eq)
 
 data GitSource = GitSource
   { gsUrl :: String
   } deriving (Show, Eq)
 
-data ContextSource
-  = CSGitSource GitSource
-  deriving (Show, Eq)
+data FilterRule a = Include a | Exclude a deriving (Show, Eq)
 
-data FilterRule = Include String | Exclude String deriving (Show, Eq)
+instance Functor FilterRule where
+  fmap f (Include a) = Include (f a)
+  fmap f (Exclude a) = Exclude (f a)
 
-data ContextFilter
-  = CFFileSystemFilter [FilterRule]
-  deriving (Show, Eq)
-
-data AddContextArgs = AddContextArgs
-  { outFile       :: FilePath
-  , title         :: String
-  , contextSource :: ContextSource
-  , contextFilter :: ContextFilter
+data CreateContextArgs = CreateContextArgs
+  { dir         :: FilePath
+  , filterRules :: [FilterRule String]
   } deriving (Show, Eq)
 
-data Command = AddContextCmd AddContextArgs deriving (Show, Eq)
+data CloneArgs = CloneArgs
+  { cloneGitSource :: GitSource
+  , cloneDir       :: FilePath
+  } deriving (Show, Eq)
+
+data Command
+  = CreateContextCmd CreateContextArgs
+  | CloneCmd CloneArgs
+  deriving (Show, Eq)
