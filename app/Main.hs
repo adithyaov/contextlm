@@ -9,6 +9,7 @@ import qualified Streamly.Data.Stream as Stream
 
 import Cli (parseArgs, usage)
 import FileSystem (createContextFS)
+import Serve (serve)
 import Types
 
 main :: IO ()
@@ -28,3 +29,6 @@ runCommand (CreateContextCmd args) =
 runCommand (CloneCmd args) = do
     createDirectoryIfMissing True (cloneDir args)
     gitCloneTo (cloneGitSource args) (cloneDir args)
+runCommand (ServeCmd args) = do
+    putStrLn $ "Listening on http://localhost:" ++ show (servePort args)
+    serve (servePort args)

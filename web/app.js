@@ -17,7 +17,7 @@ const sortNodes = nodes =>
 
 // ── HTTP (AsyncResult) ─────────────────────────────────────────────────────────
 // MODE selects the API backend. Switch to 'TEST' to use dummy.js mock responses.
-const MODE = 'TEST'; // 'PROD' | 'TEST'
+const MODE = 'PROD'; // 'PROD' | 'TEST'
 
 const api = MODE === 'TEST' ? dummyApi : liveApi;
 

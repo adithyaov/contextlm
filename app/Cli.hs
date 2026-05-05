@@ -11,6 +11,7 @@ parseArgs args = do
     case action of
         CreateContext -> CreateContextCmd <$> parseCreateContextArgs rest1
         Clone -> CloneCmd <$> parseCloneArgs rest1
+        Serve -> ServeCmd <$> parseServeArgs rest1
 
 parseCreateContextArgs :: [String] -> Either ParseError CreateContextArgs
 parseCreateContextArgs args = do
@@ -43,9 +44,17 @@ parseAction :: [String] -> Either ParseError (Action, [String])
 parseAction [] = Left "Expected action value but reached end of arguments"
 parseAction ("create-context" : rest) = Right (CreateContext, rest)
 parseAction ("clone" : rest) = Right (Clone, rest)
-parseAction (x : _) = Left $ "Unknown action '" ++ x ++ "' (expected: create-context, clone)"
+parseAction ("serve" : rest) = Right (Serve, rest)
+parseAction (x : _) = Left $ "Unknown action '" ++ x ++ "' (expected: create-context, clone, serve)"
 
 parseFilterRules :: [String] -> Either ParseError [FilterRule String]
+parseServeArgs :: [String] -> Either ParseError ServeArgs
+parseServeArgs [] = Right $ ServeArgs 3000
+parseServeArgs ["--port", p] = case reads p of
+    [(n, "")] -> Right $ ServeArgs n
+    _ -> Left $ "Invalid port number: '" ++ p ++ "'"
+parseServeArgs ("--port" : []) = Left "'--port' requires a number"
+parseServeArgs (x : _) = Left $ "Unexpected argument '" ++ x ++ "'"
 parseFilterRules [] = Right []
 parseFilterRules ("--include" : glob : rest) = (Include glob :) <$> parseFilterRules rest
 parseFilterRules ("--exclude" : glob : rest) = (Exclude glob :) <$> parseFilterRules rest
@@ -58,14 +67,15 @@ usage =
     unlines
         [ "Usage:"
         , "  contextlm --action create-context"
-        , "            --out <file>"
-        , "            --title <title>"
         , "            --dir <directory>"
         , "            [--include <glob> | --exclude <glob>] ..."
         , ""
         , "  contextlm --action clone"
         , "            --url <url>"
         , "            --dir <directory>"
+        , ""
+        , "  contextlm --action serve"
+        , "            [--port <port>]   (default: 3000)"
         , ""
         , "Arguments must appear in the order shown above."
         ]

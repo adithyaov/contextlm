@@ -13,7 +13,8 @@ common warnings
 executable contextlm
     import:           warnings
     main-is:          Main.hs
-    other-modules:    Types, Cli, FileSystem
+    ghc-options:      -threaded
+    other-modules:    Types, Cli, FileSystem, Serve
     build-depends:    base
                     , streamly-core
                     , streamly-process
@@ -21,5 +22,9 @@ executable contextlm
                     , temporary
                     , filepath
                     , Glob
+                    , scotty
+                    , aeson
+                    , text
+                    , http-types
     hs-source-dirs:   app
     default-language: Haskell2010

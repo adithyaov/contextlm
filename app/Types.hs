@@ -20,7 +20,7 @@ gitCloneTo gitSource dest =
 
 -- Data types
 
-data Action = CreateContext | Clone deriving (Show, Eq)
+data Action = CreateContext | Clone | Serve deriving (Show, Eq)
 
 data GitSource = GitSource
     { gsUrl :: String
@@ -45,7 +45,13 @@ data CloneArgs = CloneArgs
     }
     deriving (Show, Eq)
 
+data ServeArgs = ServeArgs
+    { servePort :: Int
+    }
+    deriving (Show, Eq)
+
 data Command
     = CreateContextCmd CreateContextArgs
     | CloneCmd CloneArgs
+    | ServeCmd ServeArgs
     deriving (Show, Eq)
