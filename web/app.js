@@ -60,8 +60,8 @@ const buildFileNode = (node, repoDir) =>
     ' ' + node.name,
   ]);
 
-const buildDirNode = (node, repoDir) => {
-  const det = h('details', { open: true }, [
+const buildDirNode = (node, repoDir, depth = 0) => {
+  const det = h('details', { open: depth === 0 }, [
     h('summary', {}, [
       makeCb(repoDir, node.path ?? '', true),
       h('span', { className: 'dir-arrow', textContent: '▶' }),
@@ -69,15 +69,15 @@ const buildDirNode = (node, repoDir) => {
     ]),
   ]);
   sortNodes(node.children ?? []).forEach(child =>
-    det.appendChild(buildNode(child, repoDir))
+    det.appendChild(buildNode(child, repoDir, depth + 1))
   );
   return det;
 };
 
 // Forward reference safe: buildDirNode closes over buildNode; by the time any
 // node is rendered, buildNode is fully initialised.
-const buildNode = (node, repoDir) =>
-  node.type === 'file' ? buildFileNode(node, repoDir) : buildDirNode(node, repoDir);
+const buildNode = (node, repoDir, depth = 0) =>
+  node.type === 'file' ? buildFileNode(node, repoDir) : buildDirNode(node, repoDir, depth);
 
 const buildRepoCard = (dir, tree) =>
   h('div', { className: 'repo', dataset: { dir } }, [
