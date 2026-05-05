@@ -47,6 +47,7 @@ data CloneArgs = CloneArgs
 
 data ServeArgs = ServeArgs
     { servePort :: Int
+    , serveReposDir :: FilePath
     }
     deriving (Show, Eq)
 

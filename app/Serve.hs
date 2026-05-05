@@ -3,12 +3,13 @@
 module Serve (serve) where
 
 import Control.Exception (SomeException, try)
+import Control.Monad (unless)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
-import Data.Word (Word8)
 import qualified Data.Text.Lazy as TL
+import Data.Word (Word8)
 import Network.HTTP.Types (status400, status500)
-import System.Directory (doesDirectoryExist, listDirectory)
-import System.FilePath (takeFileName, (</>))
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import System.FilePath (dropExtension, takeFileName, (</>))
 import Web.Scotty
 
 import qualified Streamly.Data.Array as Array
@@ -18,7 +19,7 @@ import qualified Streamly.FileSystem.FileIO as FileIO
 import qualified Streamly.FileSystem.Path as Path
 
 import FileSystem (createContextFS)
-import Types (FilterRule (..))
+import Types (FilterRule (..), GitSource (..), ServeArgs (..), gitCloneTo)
 
 -- ── Tree ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ data AppendResponse = AppendResponse {appended :: Int, bytes :: Int}
 instance ToJSON AppendResponse where
     toJSON r = object ["appended" .= appended r, "bytes" .= bytes r]
 
-countBytes :: Monad m => Fold.Fold m (Array.Array Word8) Int
+countBytes :: (Monad m) => Fold.Fold m (Array.Array Word8) Int
 countBytes = Fold.foldl' (\acc arr -> acc + Array.length arr) 0
 
 fileEntryToPath :: FileEntry -> FilePath
@@ -86,51 +87,95 @@ fileEntryToPath e = feDir e </> fePath e
 writeContext :: [FileEntry] -> FilePath -> IO (Int, Int)
 writeContext entries outputFile = do
     outputPath <- Path.fromString outputFile
-    let chunks  = createContextFS "." (map (Include . fileEntryToPath) entries)
+    let chunks = createContextFS "." (map (Include . fileEntryToPath) entries)
     (_, total) <- Stream.fold (Fold.tee (FileIO.writeChunks outputPath) countBytes) chunks
     return (length entries, total)
 
+-- ── Clone ─────────────────────────────────────────────────────────────────────
+
+data CloneRequest = CloneRequest {crUrl :: String}
+
+instance FromJSON CloneRequest where
+    parseJSON = withObject "CloneRequest" $ \o -> CloneRequest <$> o .: "url"
+
+data CloneResponse = CloneResponse {clDir :: String, clTree :: TreeNode}
+
+instance ToJSON CloneResponse where
+    toJSON r = object ["dir" .= clDir r, "tree" .= clTree r]
+
+repoName :: String -> String
+repoName = dropExtension . takeFileName
+
+cloneIfNeeded :: FilePath -> String -> IO FilePath
+cloneIfNeeded reposDir url = do
+    let dest = reposDir </> repoName url
+    exists <- doesDirectoryExist dest
+    unless exists $ gitCloneTo (GitSource url) dest
+    return dest
+
+cloneAndBuildTree :: FilePath -> String -> IO (FilePath, TreeNode)
+cloneAndBuildTree reposDir url = do
+    dest <- cloneIfNeeded reposDir url
+    tree <- buildTree dest
+    return (dest, tree)
+
 -- ── Server ───────────────────────────────────────────────────────────────────
 
-serve :: Int -> IO ()
-serve port = scotty port $ do
-    -- Static files
-    get "/" $ do
-        setHeader "Content-Type" "text/html; charset=utf-8"
-        file "web/index.html"
+serve :: ServeArgs -> IO ()
+serve args = do
+    createDirectoryIfMissing True (serveReposDir args)
+    scotty (servePort args) $ do
+        -- Static files
+        get "/" $ do
+            setHeader "Content-Type" "text/html; charset=utf-8"
+            file "web/index.html"
 
-    get "/style.css" $ do
-        setHeader "Content-Type" "text/css; charset=utf-8"
-        file "web/style.css"
+        get "/style.css" $ do
+            setHeader "Content-Type" "text/css; charset=utf-8"
+            file "web/style.css"
 
-    get "/utils.js" $ serveJs "web/utils.js"
-    get "/dummy.js" $ serveJs "web/dummy.js"
-    get "/live.js" $ serveJs "web/live.js"
-    get "/app.js" $ serveJs "web/app.js"
+        get "/utils.js" $ serveJs "web/utils.js"
+        get "/dummy.js" $ serveJs "web/dummy.js"
+        get "/live.js" $ serveJs "web/live.js"
+        get "/app.js" $ serveJs "web/app.js"
 
-    -- GET /api/tree?dir=<path>
-    get "/api/tree" $ do
-        dir <- queryParam "dir"
-        exists <- liftIO $ doesDirectoryExist dir
-        if not exists
-            then do
-                status status400
-                text $ "Directory not found: " <> TL.pack dir
-            else do
-                result <- liftIO (try (buildTree dir) :: IO (Either SomeException TreeNode))
-                case result of
-                    Left e -> do status status500; text (TL.pack $ show e)
-                    Right tree -> json tree
+        -- GET /api/tree?dir=<path>
+        get "/api/tree" $ do
+            dir <- queryParam "dir"
+            exists <- liftIO $ doesDirectoryExist dir
+            if not exists
+                then do
+                    status status400
+                    text $ "Directory not found: " <> TL.pack dir
+                else do
+                    result <- liftIO (try (buildTree dir) :: IO (Either SomeException TreeNode))
+                    case result of
+                        Left e -> do status status500; text (TL.pack $ show e)
+                        Right tree -> json tree
 
-    -- POST /api/context/append  { entries: [{dir, path}], output }
-    post "/api/context/append" $ do
-        req    <- jsonData
-        result <- liftIO
-            (try (writeContext (arEntries req) (arOutput req))
-                :: IO (Either SomeException (Int, Int)))
-        case result of
-            Left  e          -> do status status500; text (TL.pack $ show e)
-            Right (n, total) -> json $ AppendResponse n total
+        -- POST /api/clone  { url }
+        post "/api/clone" $ do
+            req <- jsonData
+            result <-
+                liftIO
+                    ( try (cloneAndBuildTree (serveReposDir args) (crUrl req)) ::
+                        IO (Either SomeException (FilePath, TreeNode))
+                    )
+            case result of
+                Left e -> do status status500; text (TL.pack $ show e)
+                Right (dest, tree) -> json $ CloneResponse dest tree
+
+        -- POST /api/context/append  { entries: [{dir, path}], output }
+        post "/api/context/append" $ do
+            req <- jsonData
+            result <-
+                liftIO
+                    ( try (writeContext (arEntries req) (arOutput req)) ::
+                        IO (Either SomeException (Int, Int))
+                    )
+            case result of
+                Left e -> do status status500; text (TL.pack $ show e)
+                Right (n, total) -> json $ AppendResponse n total
 
 serveJs :: FilePath -> ActionM ()
 serveJs path = do

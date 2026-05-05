@@ -31,4 +31,4 @@ runCommand (CloneCmd args) = do
     gitCloneTo (cloneGitSource args) (cloneDir args)
 runCommand (ServeCmd args) = do
     putStrLn $ "Listening on http://localhost:" ++ show (servePort args)
-    serve (servePort args)
+    serve args

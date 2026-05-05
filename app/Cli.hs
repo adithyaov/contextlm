@@ -47,14 +47,19 @@ parseAction ("clone" : rest) = Right (Clone, rest)
 parseAction ("serve" : rest) = Right (Serve, rest)
 parseAction (x : _) = Left $ "Unknown action '" ++ x ++ "' (expected: create-context, clone, serve)"
 
-parseFilterRules :: [String] -> Either ParseError [FilterRule String]
 parseServeArgs :: [String] -> Either ParseError ServeArgs
-parseServeArgs [] = Right $ ServeArgs 3000
-parseServeArgs ["--port", p] = case reads p of
-    [(n, "")] -> Right $ ServeArgs n
-    _ -> Left $ "Invalid port number: '" ++ p ++ "'"
-parseServeArgs ("--port" : []) = Left "'--port' requires a number"
-parseServeArgs (x : _) = Left $ "Unexpected argument '" ++ x ++ "'"
+parseServeArgs = go (ServeArgs 3000 "repos")
+  where
+    go acc [] = Right acc
+    go acc ("--port" : p : rest) = case reads p of
+        [(n, "")] -> go (acc{servePort = n}) rest
+        _ -> Left $ "Invalid port number: '" ++ p ++ "'"
+    go acc ("--repos-dir" : d : rest) = go (acc{serveReposDir = d}) rest
+    go _ ("--port" : []) = Left "'--port' requires a number"
+    go _ ("--repos-dir" : []) = Left "'--repos-dir' requires a path"
+    go _ (x : _) = Left $ "Unexpected argument '" ++ x ++ "'"
+
+parseFilterRules :: [String] -> Either ParseError [FilterRule String]
 parseFilterRules [] = Right []
 parseFilterRules ("--include" : glob : rest) = (Include glob :) <$> parseFilterRules rest
 parseFilterRules ("--exclude" : glob : rest) = (Exclude glob :) <$> parseFilterRules rest
@@ -75,7 +80,8 @@ usage =
         , "            --dir <directory>"
         , ""
         , "  contextlm --action serve"
-        , "            [--port <port>]   (default: 3000)"
+        , "            [--port <port>]          (default: 3000)"
+        , "            [--repos-dir <directory>] (default: repos)"
         , ""
         , "Arguments must appear in the order shown above."
         ]

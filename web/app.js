@@ -156,12 +156,12 @@ const readOutputIO = IO(() =>
   document.getElementById('output-input').value.trim()
 );
 
-const loadRepo = dir =>
-  bindIO(appendLogIO('Loading ' + dir + '…'))(() =>
-  bindIO(IO(() => api.getJSON('/api/tree?dir=' + encodeURIComponent(dir))))(result =>
+const loadRepo = url =>
+  bindIO(appendLogIO('Cloning ' + url + '…'))(() =>
+  bindIO(IO(() => api.postJSON('/api/clone', { url })))(result =>
     foldResult(
-      err  => appendLogIO('Failed to load ' + dir + ': ' + err, 'err'),
-      tree => seqIO([renderRepoIO(dir, tree), appendLogIO('Loaded ' + dir, 'ok')])
+      err             => appendLogIO('Failed: ' + err, 'err'),
+      ({ dir, tree }) => seqIO([renderRepoIO(dir, tree), appendLogIO('Loaded ' + dir, 'ok')])
     )(result)
   ));
 
@@ -207,12 +207,12 @@ document.getElementById('append-btn').addEventListener('click', () =>
 
 document.getElementById('load-btn').addEventListener('click', () => {
   const input = document.getElementById('dir-input');
-  const dir = input.value.trim();
-  if (dir) { runIO(loadRepo(dir)); input.value = ''; }
+  const url = input.value.trim();
+  if (url) { runIO(loadRepo(url)); input.value = ''; }
 });
 
 document.getElementById('dir-input').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  const dir = e.target.value.trim();
-  if (dir) { runIO(loadRepo(dir)); e.target.value = ''; }
+  const url = e.target.value.trim();
+  if (url) { runIO(loadRepo(url)); e.target.value = ''; }
 });

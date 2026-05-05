@@ -62,6 +62,12 @@ const dummyApi = (() => {
   };
 
   const handlePostJSON = async (url, body) => {
+    if (url === '/api/clone') {
+      await delay(500);
+      const repoSlug = (body.url.split('/').at(-1) ?? 'repo').replace(/\.git$/, '');
+      const dir = 'repos/' + repoSlug;
+      return Ok({ dir, tree: makeTree(repoSlug) });
+    }
     if (url === '/api/context/append') {
       await delay(250);
       const bytes = body.entries.reduce((acc, _) => acc + 800 + Math.floor(Math.random() * 600), 0);
