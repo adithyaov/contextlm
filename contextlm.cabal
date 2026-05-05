@@ -13,6 +13,7 @@ common warnings
 executable contextlm
     import:           warnings
     main-is:          Main.hs
+    other-modules:    Types, Cli
     build-depends:    base ^>=4.20.2.0
     hs-source-dirs:   app
     default-language: Haskell2010
