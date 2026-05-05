@@ -58,7 +58,7 @@ buildEntry root rel name = do
         then DirNode name rel' <$> buildChildren root rel'
         else return $ FileNode name rel'
 
--- ── Append ───────────────────────────────────────────────────────────────────
+-- ── Create Context ───────────────────────────────────────────────────────────
 
 data FileEntry = FileEntry {feDir :: String, fePath :: String}
 
@@ -66,19 +66,19 @@ instance FromJSON FileEntry where
     parseJSON = withObject "FileEntry" $ \o ->
         FileEntry <$> o .: "dir" <*> o .: "path"
 
-data AppendRequest = AppendRequest
-    { arEntries :: [FileEntry]
-    , arOutput :: String
+data CreateCtxRequest = CreateCtxRequest
+    { ccrEntries :: [FileEntry]
+    , ccrOutput :: String
     }
 
-instance FromJSON AppendRequest where
-    parseJSON = withObject "AppendRequest" $ \o ->
-        AppendRequest <$> o .: "entries" <*> o .: "output"
+instance FromJSON CreateCtxRequest where
+    parseJSON = withObject "CreateCtxRequest" $ \o ->
+        CreateCtxRequest <$> o .: "entries" <*> o .: "output"
 
-data AppendResponse = AppendResponse {appended :: Int, bytes :: Int}
+data CreateCtxResponse = CreateCtxResponse {created :: Int, bytes :: Int}
 
-instance ToJSON AppendResponse where
-    toJSON r = object ["appended" .= appended r, "bytes" .= bytes r]
+instance ToJSON CreateCtxResponse where
+    toJSON r = object ["created" .= created r, "bytes" .= bytes r]
 
 countBytes :: (Monad m) => Fold.Fold m (Array.Array Word8) Int
 countBytes = Fold.foldl' (\acc arr -> acc + Array.length arr) 0
@@ -169,17 +169,17 @@ serve args = do
                 Left e -> do status status500; text (TL.pack $ show e)
                 Right (dest, tree) -> json $ CloneResponse dest tree
 
-        -- POST /api/context/append  { entries: [{dir, path}], output }
-        post "/api/context/append" $ do
+        -- POST /api/context/create  { entries: [{dir, path}], output }
+        post "/api/context/create" $ do
             req <- jsonData
             result <-
                 liftIO
-                    ( try (writeContext (arEntries req) (arOutput req)) ::
+                    ( try (writeContext (ccrEntries req) (ccrOutput req)) ::
                         IO (Either SomeException (Int, Int))
                     )
             case result of
                 Left e -> do status status500; text (TL.pack $ show e)
-                Right (n, total) -> json $ AppendResponse n total
+                Right (n, total) -> json $ CreateCtxResponse n total
 
 serveJs :: FilePath -> ActionM ()
 serveJs path = do

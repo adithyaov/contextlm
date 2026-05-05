@@ -62,17 +62,17 @@ const loadRepo = url => {
   });
 };
 
-const appendContext = () => {
+const createContext = () => {
   const entries = state.repos.flatMap(r =>
     [...r.checked].map(path => ({ dir: r.dir, path }))
   );
   if (!entries.length)       { addLog('No files selected.', 'err'); return; }
   if (!state.outputInput)    { addLog('No output file specified.', 'err'); return; }
-  addLog('Appending ' + entries.length + ' file(s) → ' + state.outputInput + '…');
-  api.postJSON('/api/context/append', { entries, output: state.outputInput }).then(result => {
+  addLog('Creating context for ' + entries.length + ' file(s) → ' + state.outputInput + '…');
+  api.postJSON('/api/context/create', { entries, output: state.outputInput }).then(result => {
     foldResult(
       err                   => addLog('Error: ' + err, 'err'),
-      ({ appended, bytes }) => addLog('Done — ' + appended + ' file(s), ' + bytes + ' bytes written.', 'ok')
+      ({ created, bytes }) => addLog('Done — ' + created + ' file(s), ' + bytes + ' bytes written.', 'ok')
     )(result);
     m.redraw();
   });
@@ -191,7 +191,7 @@ const App = {
             placeholder: '/path/to/context.xml',
             oninput:     e => { state.outputInput = e.target.value; },
           }),
-          m('button.primary', { onclick: appendContext }, 'Append Context'),
+          m('button.primary', { onclick: createContext }, 'Create Context'),
         ]),
       ]),
 

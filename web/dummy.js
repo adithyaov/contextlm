@@ -68,10 +68,10 @@ const dummyApi = (() => {
       const dir = 'repos/' + repoSlug;
       return Ok({ dir, tree: makeTree(repoSlug) });
     }
-    if (url === '/api/context/append') {
+    if (url === '/api/context/create') {
       await delay(250);
       const bytes = body.entries.reduce((acc, _) => acc + 800 + Math.floor(Math.random() * 600), 0);
-      return Ok({ appended: body.entries.length, bytes });
+      return Ok({ created: body.entries.length, bytes });
     }
     return Err('[dummy] Unknown POST endpoint: ' + url);
   };
