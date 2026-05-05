@@ -1,218 +1,206 @@
 'use strict';
 
-// ── Utilities ──────────────────────────────────────────────────────────────────
+// ── Mode ──────────────────────────────────────────────────────────────────────
+const MODE = 'PROD'; // 'PROD' | 'TEST'
+const api  = MODE === 'TEST' ? dummyApi : liveApi;
 
-const esc = s =>
-  String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+// ── State ─────────────────────────────────────────────────────────────────────
+const state = {
+  repos:       [],
+  urlInput:    '',
+  outputInput: 'context.xml',
+  log:         [{ msg: 'Ready.', cls: 'info' }],
+};
+
+// ── State helpers ─────────────────────────────────────────────────────────────
+
+const addLog = (msg, cls = 'info') => state.log.push({ msg, cls });
+
+const addRepo = (dir, tree) => {
+  state.repos = state.repos.filter(r => r.dir !== dir);
+  state.repos.push({
+    dir,
+    tree,
+    checked:  new Set(),
+    openDirs: new Set(['']),  // root open by default
+  });
+};
+
+// ── Tree helpers ──────────────────────────────────────────────────────────────
 
 const sortNodes = nodes =>
   [...nodes].sort((a, b) =>
-    a.type !== b.type
-      ? (a.type === 'dir' ? -1 : 1)
-      : a.name.localeCompare(b.name)
+    a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : a.name.localeCompare(b.name)
   );
 
-// ── HTTP (AsyncResult) ─────────────────────────────────────────────────────────
-// MODE selects the API backend. Switch to 'TEST' to use dummy.js mock responses.
-const MODE = 'PROD'; // 'PROD' | 'TEST'
+const allFilePaths = node =>
+  node.type === 'file'
+    ? [node.path]
+    : (node.children ?? []).flatMap(allFilePaths);
 
-const api = MODE === 'TEST' ? dummyApi : liveApi;
-
-// ── Log (IO) ───────────────────────────────────────────────────────────────────
-
-const appendLogIO = (msg, cls = 'info') => IO(() => {
-  const el = document.getElementById('log');
-  el.innerHTML += '\n<span class="' + cls + '">' + esc(msg) + '</span>';
-  el.scrollTop = el.scrollHeight;
-});
-
-// ── DOM element builder ────────────────────────────────────────────────────────
-// Pure helper: creates an element, sets properties, appends children.
-// `dataset` key is handled specially to populate `element.dataset`.
-
-const h = (tag, props = {}, children = []) => {
-  const node = document.createElement(tag);
-  Object.entries(props).forEach(([k, v]) => {
-    if (k === 'dataset') Object.entries(v).forEach(([dk, dv]) => { node.dataset[dk] = dv; });
-    else node[k] = v;
-  });
-  children.forEach(child =>
-    typeof child === 'string' ? node.append(child) : node.appendChild(child)
-  );
-  return node;
+const dirCheckState = (node, checked) => {
+  const paths = allFilePaths(node);
+  const n = paths.filter(p => checked.has(p)).length;
+  if (n === 0)            return 'unchecked';
+  if (n === paths.length) return 'checked';
+  return                         'indeterminate';
 };
 
-// ── Tree rendering (pure) ──────────────────────────────────────────────────────
+const setDirChecked = (node, checked, value) =>
+  allFilePaths(node).forEach(p => value ? checked.add(p) : checked.delete(p));
 
-const makeCb = (repoDir, relPath, isDir) =>
-  h('input', {
-    type:    'checkbox',
-    dataset: { repoDir, relPath, isDir: isDir ? '1' : '0' },
-  });
+// ── Actions ───────────────────────────────────────────────────────────────────
 
-const buildFileNode = (node, repoDir) =>
-  h('label', { className: 'tree-file' }, [
-    makeCb(repoDir, node.path, false),
-    h('span', { className: 'file-icon', textContent: '—' }),
-    ' ' + node.name,
-  ]);
-
-const buildDirNode = (node, repoDir, depth = 0) => {
-  const det = h('details', { open: depth === 0 }, [
-    h('summary', {}, [
-      makeCb(repoDir, node.path ?? '', true),
-      h('span', { className: 'dir-arrow', textContent: '▶' }),
-      ' ' + node.name,
-    ]),
-  ]);
-  sortNodes(node.children ?? []).forEach(child =>
-    det.appendChild(buildNode(child, repoDir, depth + 1))
-  );
-  return det;
-};
-
-// Forward reference safe: buildDirNode closes over buildNode; by the time any
-// node is rendered, buildNode is fully initialised.
-const buildNode = (node, repoDir, depth = 0) =>
-  node.type === 'file' ? buildFileNode(node, repoDir) : buildDirNode(node, repoDir, depth);
-
-const buildRepoCard = (dir, tree) =>
-  h('div', { className: 'repo', dataset: { dir } }, [
-    h('div', { className: 'repo-header' }, [
-      h('div', {}, [
-        h('span', { className: 'repo-name', textContent: tree.name }),
-        h('span', { className: 'repo-path', textContent: dir }),
-      ]),
-      h('div', { className: 'repo-acts' }, [
-        h('button', { className: 'ghost js-all',    textContent: 'all'    }),
-        h('button', { className: 'ghost js-none',   textContent: 'none'   }),
-        h('button', { className: 'ghost js-remove', textContent: 'remove' }),
-      ]),
-    ]),
-    h('div', { className: 'repo-tree' }, [buildNode(tree, dir)]),
-  ]);
-
-// ── Checkbox state (pure) ─────────────────────────────────────────────────────
-// Computes the correct checked/indeterminate state for a parent checkbox
-// given all checkboxes under it (including itself).
-
-const computeParentState = (parentCb, allUnder) => {
-  const others = allUnder.filter(c => c !== parentCb);
-  const n = others.filter(c => c.checked && !c.indeterminate).length;
-  if (n === 0)             return { checked: false, indeterminate: false };
-  if (n === others.length) return { checked: true,  indeterminate: false };
-  return                          { checked: false, indeterminate: true  };
-};
-
-// ── Checkbox effects (IO) ─────────────────────────────────────────────────────
-
-const pushDownIO = cb => IO(() => {
-  [...cb.closest('details').querySelectorAll('input[type=checkbox]')]
-    .filter(c => c !== cb)
-    .forEach(c => { c.checked = cb.checked; c.indeterminate = false; });
-});
-
-const bubbleUpIO = cb => IO(() => {
-  const step = current => {
-    const parentDet = current.closest('details')?.parentElement?.closest('details');
-    if (!parentDet) return;
-    const parentCb = parentDet.querySelector(':scope > summary > input[type=checkbox]');
-    if (!parentCb) return;
-    const state = computeParentState(
-      parentCb,
-      [...parentDet.querySelectorAll('input[type=checkbox]')]
-    );
-    parentCb.checked = state.checked;
-    parentCb.indeterminate = state.indeterminate;
-    step(parentCb);
-  };
-  step(cb);
-});
-
-const setAllIO = (card, checked) => IO(() =>
-  [...card.querySelectorAll('input[type=checkbox]')]
-    .forEach(c => { c.checked = checked; c.indeterminate = false; })
-);
-
-// ── Repo card effects (IO) ────────────────────────────────────────────────────
-
-const renderRepoIO = (dir, tree) => IO(() => {
-  const existing = document.querySelector(`.repo[data-dir="${CSS.escape(dir)}"]`);
-  if (existing) existing.remove();
-  document.getElementById('repos').appendChild(buildRepoCard(dir, tree));
-});
-
-// ── Actions ────────────────────────────────────────────────────────────────────
-
-const collectEntriesIO = IO(() =>
-  [...document.querySelectorAll('input[type=checkbox][data-is-dir="0"]:checked')]
-    .map(cb => ({ dir: cb.dataset.repoDir, path: cb.dataset.relPath }))
-);
-
-const readOutputIO = IO(() =>
-  document.getElementById('output-input').value.trim()
-);
-
-const loadRepo = url =>
-  bindIO(appendLogIO('Cloning ' + url + '…'))(() =>
-  bindIO(IO(() => api.postJSON('/api/clone', { url })))(result =>
+const loadRepo = url => {
+  addLog('Cloning ' + url + '…');
+  api.postJSON('/api/clone', { url }).then(result => {
     foldResult(
-      err             => appendLogIO('Failed: ' + err, 'err'),
-      ({ dir, tree }) => seqIO([renderRepoIO(dir, tree), appendLogIO('Loaded ' + dir, 'ok')])
-    )(result)
-  ));
+      err             => addLog('Failed: ' + err, 'err'),
+      ({ dir, tree }) => { addRepo(dir, tree); addLog('Loaded ' + dir, 'ok'); }
+    )(result);
+    m.redraw();
+  });
+};
 
-const appendContext = () =>
-  bindIO(collectEntriesIO)(entries =>
-  bindIO(readOutputIO)(output => {
-    if (!entries.length) return appendLogIO('No files selected.', 'err');
-    if (!output)         return appendLogIO('No output file specified.', 'err');
-    return (
-      bindIO(appendLogIO('Appending ' + entries.length + ' file(s) → ' + output + '…'))(() =>
-      bindIO(IO(() => api.postJSON('/api/context/append', { entries, output })))(result =>
-        foldResult(
-          err                   => appendLogIO('Error: ' + err, 'err'),
-          ({ appended, bytes }) => appendLogIO('Done — ' + appended + ' file(s), ' + bytes + ' bytes written.', 'ok')
-        )(result)
-      ))
-    );
-  }));
-
-// ── Event handlers ─────────────────────────────────────────────────────────────
-
-document.getElementById('repos').addEventListener('change', e => {
-  const cb = e.target;
-  if (cb.type !== 'checkbox') return;
-  runIO(cb.dataset.isDir === '1'
-    ? seqIO([pushDownIO(cb), bubbleUpIO(cb)])
-    : bubbleUpIO(cb)
+const appendContext = () => {
+  const entries = state.repos.flatMap(r =>
+    [...r.checked].map(path => ({ dir: r.dir, path }))
   );
-});
+  if (!entries.length)       { addLog('No files selected.', 'err'); return; }
+  if (!state.outputInput)    { addLog('No output file specified.', 'err'); return; }
+  addLog('Appending ' + entries.length + ' file(s) → ' + state.outputInput + '…');
+  api.postJSON('/api/context/append', { entries, output: state.outputInput }).then(result => {
+    foldResult(
+      err                   => addLog('Error: ' + err, 'err'),
+      ({ appended, bytes }) => addLog('Done — ' + appended + ' file(s), ' + bytes + ' bytes written.', 'ok')
+    )(result);
+    m.redraw();
+  });
+};
 
-document.getElementById('repos').addEventListener('click', e => {
-  const card = e.target.closest('.repo');
-  if (!card) return;
-  const cl = e.target.classList;
-  if      (cl.contains('js-all'))    runIO(setAllIO(card, true));
-  else if (cl.contains('js-none'))   runIO(setAllIO(card, false));
-  else if (cl.contains('js-remove')) card.remove();
-});
+// ── Components ────────────────────────────────────────────────────────────────
 
-document.getElementById('append-btn').addEventListener('click', () =>
-  runIO(appendContext())
-);
+const FileRow = {
+  view({ attrs: { node, repo } }) {
+    return m('label.tree-file', [
+      m('input[type=checkbox]', {
+        checked:  repo.checked.has(node.path),
+        onchange: e =>
+          e.target.checked ? repo.checked.add(node.path) : repo.checked.delete(node.path),
+      }),
+      m('span.file-icon', '—'),
+      ' ' + node.name,
+    ]);
+  },
+};
 
-document.getElementById('load-btn').addEventListener('click', () => {
-  const input = document.getElementById('dir-input');
-  const url = input.value.trim();
-  if (url) { runIO(loadRepo(url)); input.value = ''; }
-});
+const DirRow = {
+  view({ attrs: { node, repo, depth } }) {
+    const st   = dirCheckState(node, repo.checked);
+    const open = repo.openDirs.has(node.path);
+    const syncIndeterminate = ({ dom }) => { dom.indeterminate = st === 'indeterminate'; };
+    return m('details', {
+      open,
+      ontoggle: e =>
+        e.target.open ? repo.openDirs.add(node.path) : repo.openDirs.delete(node.path),
+    }, [
+      m('summary', [
+        m('input[type=checkbox]', {
+          checked:  st === 'checked',
+          oncreate: syncIndeterminate,
+          onupdate: syncIndeterminate,
+          onchange: e => setDirChecked(node, repo.checked, e.target.checked),
+          onclick:  e => e.stopPropagation(),
+        }),
+        m('span.dir-arrow', '▶'),
+        ' ' + node.name,
+      ]),
+      ...sortNodes(node.children ?? []).map(child =>
+        m(child.type === 'file' ? FileRow : DirRow, { node: child, repo, depth: depth + 1 })
+      ),
+    ]);
+  },
+};
 
-document.getElementById('dir-input').addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const url = e.target.value.trim();
-  if (url) { runIO(loadRepo(url)); e.target.value = ''; }
-});
+const RepoCard = {
+  view({ attrs: { repo } }) {
+    return m('.repo', [
+      m('.repo-header', [
+        m('div', [
+          m('span.repo-name', repo.tree.name),
+          m('span.repo-path', ' ' + repo.dir),
+        ]),
+        m('.repo-acts', [
+          m('button.ghost', { onclick: () => setDirChecked(repo.tree, repo.checked, true)  }, 'all'),
+          m('button.ghost', { onclick: () => setDirChecked(repo.tree, repo.checked, false) }, 'none'),
+          m('button.ghost', { onclick: () => { state.repos = state.repos.filter(r => r !== repo); } }, 'remove'),
+        ]),
+      ]),
+      m('.repo-tree', m(DirRow, { node: repo.tree, repo, depth: 0 })),
+    ]);
+  },
+};
+
+const LogPanel = {
+  oncreate: ({ dom }) => { dom.scrollTop = dom.scrollHeight; },
+  onupdate: ({ dom }) => { dom.scrollTop = dom.scrollHeight; },
+  view() {
+    return m('pre#log',
+      state.log.map(({ msg, cls }) => m('span', { class: cls }, msg + '\n'))
+    );
+  },
+};
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+const App = {
+  view() {
+    return m('main', [
+      m('h1', 'contextlm'),
+
+      m('.panel', [
+        m('.panel-title', 'Repository'),
+        m('.row', [
+          m('input[type=text]', {
+            placeholder: 'https://github.com/user/repo',
+            value:       state.urlInput,
+            oninput:     e => { state.urlInput = e.target.value; },
+            onkeydown:   e => {
+              if (e.key !== 'Enter' || !state.urlInput.trim()) return;
+              loadRepo(state.urlInput.trim());
+              state.urlInput = '';
+            },
+          }),
+          m('button', {
+            onclick: () => {
+              if (!state.urlInput.trim()) return;
+              loadRepo(state.urlInput.trim());
+              state.urlInput = '';
+            },
+          }, 'Load'),
+        ]),
+      ]),
+
+      state.repos.map(repo => m(RepoCard, { key: repo.dir, repo })),
+
+      m('.panel', [
+        m('.panel-title', 'Output'),
+        m('.row', [
+          m('input[type=text]', {
+            value:       state.outputInput,
+            placeholder: '/path/to/context.xml',
+            oninput:     e => { state.outputInput = e.target.value; },
+          }),
+          m('button.primary', { onclick: appendContext }, 'Append Context'),
+        ]),
+      ]),
+
+      m('.panel', [
+        m('.panel-title', 'Log'),
+        m(LogPanel),
+      ]),
+    ]);
+  },
+};
+
+m.mount(document.body, App);

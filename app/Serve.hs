@@ -137,6 +137,7 @@ serve args = do
             setHeader "Content-Type" "text/css; charset=utf-8"
             file (webDir </> "style.css")
 
+        get "/mithril.min.js" $ serveJs (webDir </> "mithril.min.js")
         get "/utils.js" $ serveJs (webDir </> "utils.js")
         get "/dummy.js" $ serveJs (webDir </> "dummy.js")
         get "/live.js"  $ serveJs (webDir </> "live.js")

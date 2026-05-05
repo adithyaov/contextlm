@@ -6,36 +6,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<h1>contextlm</h1>
-
-<!-- Add repo -->
-<div class="panel">
-  <div class="panel-title">Repository</div>
-  <div class="row">
-    <input type="text" id="dir-input" placeholder="https://github.com/user/repo">
-    <button id="load-btn">Load Tree</button>
-  </div>
-</div>
-
-<!-- Repo cards injected here -->
-<div id="repos"></div>
-
-<!-- Output -->
-<div class="panel">
-  <div class="panel-title">Output</div>
-  <div class="row">
-    <input type="text" id="output-input" value="context.xml" placeholder="/path/to/context.xml">
-    <button class="primary" id="append-btn">Append Context</button>
-  </div>
-</div>
-
-<!-- Log -->
-<div class="panel">
-  <div class="panel-title">Log</div>
-  <pre id="log"><span class="info">Ready.</span></pre>
-</div>
-
+<script src="mithril.min.js"></script>
 <script src="utils.js"></script>
 <script src="dummy.js"></script>
 <script src="live.js"></script>
