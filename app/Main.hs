@@ -13,18 +13,18 @@ import Types
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case parseArgs args of
-    Left err -> do
-      putStrLn $ "Error: " ++ err
-      putStrLn ""
-      putStrLn usage
-      exitFailure
-    Right cmd -> runCommand cmd
+    args <- getArgs
+    case parseArgs args of
+        Left err -> do
+            putStrLn $ "Error: " ++ err
+            putStrLn ""
+            putStrLn usage
+            exitFailure
+        Right cmd -> runCommand cmd
 
 runCommand :: Command -> IO ()
 runCommand (CreateContextCmd args) =
-  Stream.fold Stdio.writeChunks $ createContextFS (dir args) (filterRules args)
+    Stream.fold Stdio.writeChunks $ createContextFS (dir args) (filterRules args)
 runCommand (CloneCmd args) = do
-  createDirectoryIfMissing True (cloneDir args)
-  gitCloneTo (cloneGitSource args) (cloneDir args)
+    createDirectoryIfMissing True (cloneDir args)
+    gitCloneTo (cloneGitSource args) (cloneDir args)
